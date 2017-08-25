@@ -475,12 +475,16 @@ void dictRelease(dict *d)
 
 dictEntry *dictFind(dict *d, const void *key)
 {
+    /*
+    *  典型的map实现：通过hash将key定位到数据的某个位置
+    *  数据保存的是一个链表，遍历链表得到数据（参考java的HashMap实现）
+    */
     dictEntry *he;
     unsigned int h, idx, table;
 
     if (d->ht[0].used + d->ht[1].used == 0) return NULL; /* dict is empty */
     if (dictIsRehashing(d)) _dictRehashStep(d);
-    h = dictHashKey(d, key);
+    h = dictHashKey(d, key); /*每种key都有自己的hash函数*/
     for (table = 0; table <= 1; table++) {
         idx = h & d->ht[table].sizemask;
         he = d->ht[table].table[idx];

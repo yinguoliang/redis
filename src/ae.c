@@ -458,9 +458,19 @@ int aeWait(int fd, int mask, long long milliseconds) {
 
 void aeMain(aeEventLoop *eventLoop) {
     eventLoop->stop = 0;
+    /*
+    * 注意:eventLoop是一个数据结构，
+    * 包括几个事件队列（列表）和事件处理方法，
+    * 以及几个连接描述符（从描述符中可以读到连接请求）
+    * 本方法 aeMain 负责执行这个数据结构（一个死循环）
+    */
     while (!eventLoop->stop) {
         if (eventLoop->beforesleep != NULL)
             eventLoop->beforesleep(eventLoop);
+        /*
+        *  下面这个方法会从异步连接中读取连接请求，并处理
+        *  里面根据实际的平台，选择了epoll, kqueue, select等方式（参考aeApiPoll）
+        */
         aeProcessEvents(eventLoop, AE_ALL_EVENTS|AE_CALL_AFTER_SLEEP);
     }
 }

@@ -1691,6 +1691,14 @@ void checkTcpBacklogSettings(void) {
  * one of the IPv4 or IPv6 protocols. */
 int listenToPort(int port, int *fds, int *count) {
     int j;
+    /*
+    * ==================参数说明======================
+    *
+    * fds: 存储套接字。 新建立的监听套接字直接追加到末尾上
+    *      注意：c数组下标是从0开始的，所以可以使用(*count)=xxx 可以直接在后面追加
+    *      备注：count 和 fds 没有什么关系
+    * count: 当前fds个数指针
+    */
 
     /* Force binding of 0.0.0.0 if no bind address is specified, always
      * entering the loop if j == 0. */
@@ -1743,6 +1751,7 @@ int listenToPort(int port, int *fds, int *count) {
             return C_ERR;
         }
         anetNonBlock(NULL,fds[*count]);
+        //fd个数+1
         (*count)++;
     }
     return C_OK;
@@ -1811,6 +1820,20 @@ void initServer(void) {
 
     createSharedObjects();
     adjustOpenFilesLimit();
+    /*
+    *   epoll模型处理流程：
+    *    1. 创建epoll
+    *    2. 将异步事件源加入epoll
+    *    3. 等待感兴趣的事件到来
+    */
+
+    /*
+    *  创建eventLoop
+    *  初始化events实例，包括el->events, el->fired, 大小为指定size
+    *  并且将events的mask设置为AE_NONE
+    *  (提前申请了aeFileEvent对象空间，避免了运行时的开销，同时也可避免运行时随意申请空间，导致异常出现)
+    *  
+    */
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -1821,6 +1844,9 @@ void initServer(void) {
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
     /* Open the TCP listening socket for the user commands. */
+    /*
+    *  ipfd_count: 默认是从0开始的
+    */
     if (server.port != 0 &&
         listenToPort(server.port,server.ipfd,&server.ipfd_count) == C_ERR)
         exit(1);
@@ -1896,6 +1922,9 @@ void initServer(void) {
 
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
+    /*
+    *  如果采用epoll,这里就是使用epoll_ctl将指定的套接字绑定到epoll句柄上
+    */
     for (j = 0; j < server.ipfd_count; j++) {
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
             acceptTcpHandler,NULL) == AE_ERR)
@@ -1977,7 +2006,10 @@ void populateCommandTable(void) {
             }
             f++;
         }
-
+        /*
+        *  将指令收集到server.commands中，commands是一个dict(也就是hash map表)
+        *  这样通过name就可以很容易到找到对应的对应的处理器了（典型的表驱动模式）
+        */
         retval1 = dictAdd(server.commands, sdsnew(c->name), c);
         /* Populate an additional dictionary that will be unaffected
          * by rename-command statements in redis.conf. */
